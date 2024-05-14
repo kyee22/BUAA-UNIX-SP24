@@ -2,12 +2,14 @@
              计算机学院 School of Computer Science and Engineering
 	May 2024
 */
-#include<stdio.h>
-#include<stdlib.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
 #include <unistd.h>
-#include<math.h>
-#include<ctype.h>
-#include<string.h>
+#include <sys/wait.h>
+#include <math.h>
+#include <ctype.h>
+#include <string.h>
 
 
 #define NTOKEN 1024		/* Token     数量上限 */
@@ -40,8 +42,11 @@ void CMD_INIT(Cmd * cmd, int nargc);		/*  初始化 Cmd 结构体  */
 void makeToken(Token *token, Token_t type, char *str, unsigned int len);	/*  解析: buf   ->  Token  */
 void parseTokens(Token *tokens, char *buf);									/*  解析: Token ->  Cmd    */
 void parseCmds(Cmd * cmds, Token *tokens);
-void printTokens(Token *tokens);// for debug
-void bufcpy(char *s, char *buf, size_t len);
+void printTokens(Token *tokens);	// for debug
+void printCmds(Cmd *cmds); 			// for debug
+void bufcpy(char **s, char *buf, size_t len);
+void execCmd(Cmd *cmd, int fd_in, int fd_out);
+void execCmdAll(Cmd *cmds);
 
 int main() {
 
@@ -51,14 +56,17 @@ int main() {
 		print_current_directory();
 		if (fgets(buf, BUF_SIZE, stdin) != NULL) {
 			if (buf[strlen(buf) - 1] == '\n') buf[strlen(buf) - 1] = '\0';
-			if (strcmp(buf, "exit") == 0) {
-				printf("Over!");
-				break;
-			}
+			// if (strcmp(buf, "exit") == 0) {
+    		// 	printf("\033[1;33m | ____|_  _(_) |_  |  \\/  |_   _/ ___|| |__   ___| | | \n |  _| \\ \\/ / | __| | |\\/| | | | \\___ \\| '_ \\ / _ \\ | | \n | |___ >  <| | |_  | |  | | |_| |___) | | | |  __/ | | \n |_____/_/\\_\\_|\\__| |_|  |_|\\__, |____/|_| |_|\\___|_|_| \n                            |___/                       \033[0m\n");
+			// 	break;
+			// }
 			Cmd * cmds = (Cmd *) malloc(sizeof(Cmd) * NCMD);
 			Token * tokens = (Token *) malloc(sizeof(Token) * NTOKEN);
 			parseTokens(tokens, buf);
-			printTokens(tokens);
+			// printTokens(tokens);
+			parseCmds(cmds, tokens);
+			// printCmds(cmds);
+			execCmdAll(cmds);
 		} else {
 			panic("Error Occurred in Input Buffer!");
 		}
@@ -68,24 +76,24 @@ int main() {
 
 void greet_hello() {
 	printf("\033[1;36m           Welcome to MyShell   \033[1;32m       ___                 ___   ___  \n");
-	printf("\033[1;33m           author: Kuang Yixuan   \033[1;32m    (   )               (   ) (   ) \n");
-    printf("\033[1;33m        studentID: 22371092      \033[1;32m     (   )               (   ) (   ) \033[0m\n");
-	printf("\033[1;32m ___ .-. .-.    \033[1;33m___  ___\033[1;32m      .--.     | | .-.     .--.    | |   | |  \n");
-    printf("\033[1;32m(   )   '   \\  \033[1;33m(   )(   )\033[1;32m   /  _  \\    | |/   \\   /    \\   | |   | |  \n");
-	printf("\033[1;32m |  .-.  .-. ;  \033[1;33m| |  | |\033[1;32m   . .' `. ;   |  .-. .  |  .-. ;  | |   | |  \n");
-	printf("\033[1;32m | |  | |  | |  \033[1;33m| |  | |\033[1;32m   | '   | |   | |  | |  |  | | |  | |   | |  \n");
-    printf("\033[1;32m | |  | |  | |  \033[1;33m| '  | |\033[1;32m   _\\_`.(___)  | |  | |  |  |/  |  | |   | |  \n");
-	printf("\033[1;32m | |  | |  | |  \033[1;33m'  `-' |\033[1;32m  (   ). '.    | |  | |  |  ' _.'  | |   | |  \n");
-	printf("\033[1;32m | |  | |  | |  \033[1;33m `.__. |\033[1;32m   | |  `\\ |   | |  | |  |  .'.-.  | |   | |  \n");
-    printf("\033[1;32m | |  | |  | |  \033[1;33m ___ | |\033[1;32m   ; '._,' '   | |  | |  '  `-' /  | |   | |  \n");
-	printf("\033[1;32m(___)(___)(___) \033[1;33m(   )' |\033[1;32m    '.___.'   (___)(___)  `.__.'  (___) (___) \n");
-	printf("\033[1;32m                 \033[1;33m; `-' '\033[1;32m                                              \n");
-	printf("\033[1;32m                  \033[1;33m.__.'\033[1;32m                                               \n\033[31m");
+	printf("\033[1;36m           author: Kuang Yixuan   \033[1;32m    (   )               (   ) (   ) \n");
+    printf("\033[1;36m        studentID: 22371092      \033[1;32m     (   )               (   ) (   ) \033[0m\n");
+	printf("\033[1;32m ___ .-. .-.    \033[1;36m___  ___\033[1;32m      .--.     | | .-.     .--.    | |   | |  \n");
+    printf("\033[1;32m(   )   '   \\  \033[1;36m(   )(   )\033[1;32m   /  _  \\    | |/   \\   /    \\   | |   | |  \n");
+	printf("\033[1;32m |  .-.  .-. ;  \033[1;36m| |  | |\033[1;32m   . .' `. ;   |  .-. .  |  .-. ;  | |   | |  \n");
+	printf("\033[1;32m | |  | |  | |  \033[1;36m| |  | |\033[1;32m   | '   | |   | |  | |  |  | | |  | |   | |  \n");
+    printf("\033[1;32m | |  | |  | |  \033[1;36m| '  | |\033[1;32m   _\\_`.(___)  | |  | |  |  |/  |  | |   | |  \n");
+	printf("\033[1;32m | |  | |  | |  \033[1;36m'  `-' |\033[1;32m  (   ). '.    | |  | |  |  ' _.'  | |   | |  \n");
+	printf("\033[1;32m | |  | |  | |  \033[1;36m `.__. |\033[1;32m   | |  `\\ |   | |  | |  |  .'.-.  | |   | |  \n");
+    printf("\033[1;32m | |  | |  | |  \033[1;36m ___ | |\033[1;32m   ; '._,' '   | |  | |  '  `-' /  | |   | |  \n");
+	printf("\033[1;32m(___)(___)(___) \033[1;36m(   )' |\033[1;32m    '.___.'   (___)(___)  `.__.'  (___) (___) \n");
+	printf("\033[1;32m                 \033[1;36m; `-' '\033[1;32m                                              \n");
+	printf("\033[1;32m                  \033[1;36m.__.'\033[1;32m                                               \n\033[31m");
 }
 
 void print_current_directory(){
     char *path = getcwd(NULL, 0);
-    printf("\033[0;33m%s\033[0m%s\033[1;36m%s\033[0m $ ","myShell",":", path);
+    printf("\033[0;36m%s\033[0m%s\033[1;36m%s\033[0m $ ","myShell",":", path);
     free(path);
 }
 
@@ -157,13 +165,13 @@ void parseCmds(Cmd *cmds, Token *tokens) {
 	char **args, **dstp;
 	Token *tmp;
 	while (tokens->type != TOKEN_END) {
-		/* code */
 		nargc = 0;
 		tmp = tokens;
-		while (tmp->type != TOKEN_END && tmp->type != TOKEN_PIPE) ++nargc;
-		CMD_INIT(cmds, nargc + 1); // we alloc another 1 arg space with 0-padding to indicate END of args
+		while (tmp->type != TOKEN_END && tmp->type != TOKEN_PIPE) ++nargc,++tmp;
+		CMD_INIT(cmds, nargc + 1); // we alloc 1 more arg space with 0-padding to indicate END of args
 		args = cmds->cmd_args;
 		int hit_target = 0;
+		
 		while (tokens->type != TOKEN_END && tokens->type != TOKEN_PIPE) {
 			switch (tokens->type)
 			{
@@ -172,10 +180,10 @@ void parseCmds(Cmd *cmds, Token *tokens) {
 					if (!hit_target) {
 						if (tokens->type == TOKEN_SYM) {
 							hit_target = 1;
-							bufcpy(cmds->cmd_target, tokens->str, tokens->len);
+							bufcpy(&(cmds->cmd_target), tokens->str, tokens->len);
 						} else panic("Error Occurred in your command format!");
 					}
-					bufcpy(*args, tokens->str, tokens->len);
+					bufcpy(args, tokens->str, tokens->len);
 					++args;
 					++tokens;
 					break;
@@ -186,7 +194,7 @@ void parseCmds(Cmd *cmds, Token *tokens) {
 						   (tokens->type == TOKEN_REDIR_OUT) ? &cmds->cmd_file_out: &cmds->cmd_file_apd;
 					++tokens;	// skip to get the redirection path
 					if (tokens->type != TOKEN_SYM && tokens->type != TOKEN_STR) panic("Error Occurred in your redirection path!");
-					bufcpy(*dstp, tokens->str, tokens->len);
+					bufcpy(dstp, tokens->str, tokens->len);
 					++tokens;	// skip the redirection path to next...
 					break;
 				default:
@@ -198,7 +206,7 @@ void parseCmds(Cmd *cmds, Token *tokens) {
 		++cmds;
 		if (tokens->type == TOKEN_PIPE) {
 			++tokens;
-			if (tokens->type == TOKEN_END) panic("Error Occurred near you pipe! Empty command after pipe!");
+			if (tokens->type == TOKEN_END) panic("Error Occurred near you pipe! \nEmpty command after pipe!");
 		}
 	}
 	cmds->cmd_target = NULL;
@@ -235,8 +243,72 @@ void printTokens(Token *tokens) {
 		++tokens;
 	}
 }
-void bufcpy(char *s, char *buf, size_t len) {
-	s = (char *)malloc(sizeof(char) * (len + 1));
-	memcpy(s, buf, len);
-	s[len] = '\0';
+void printCmds(Cmd *cmds) {
+	int tot = 0;
+	while (cmds->cmd_target != NULL)
+	{
+		printf("(command %d) [%s]: ",++tot, cmds->cmd_target);
+		char **args = cmds->cmd_args;
+		while (*args != 0) {
+			printf("[%s]; ", *args);
+			++args;
+		}
+		if (cmds->cmd_file_in) printf(" < [%s]",cmds->cmd_file_in);
+		if (cmds->cmd_file_out) printf(" > [%s]",cmds->cmd_file_out);
+		if (cmds->cmd_file_apd) printf(" >> [%s]",cmds->cmd_file_apd);
+		printf("\n");
+		++cmds;
+	}
+	
+}
+void bufcpy(char **s, char *buf, size_t len) {
+	*s = (char *)malloc(sizeof(char) * (len + 1));
+	memcpy(*s, buf, len);
+	(*s)[len] = '\0';
+}
+void execCmd(Cmd *cmd, int fd_in, int fd_out) {
+	if (strcmp(cmd->cmd_target, "exit") == 0) {
+    	printf("\033[1;33m | ____|_  _(_) |_  |  \\/  |_   _/ ___|| |__   ___| | | \n |  _| \\ \\/ / | __| | |\\/| | | | \\___ \\| '_ \\ / _ \\ | | \n | |___ >  <| | |_  | |  | | |_| |___) | | | |  __/ | | \n |_____/_/\\_\\_|\\__| |_|  |_|\\__, |____/|_| |_|\\___|_|_| \n                            |___/                       \033[0m\n");
+		panic("My Shell has closed.");
+	} else if (strcmp(cmd->cmd_target, "cd") == 0) {
+		if (chdir(cmd->cmd_args[1]) != 0) panic("Error Occurred in you cd path! \nCheck your path!");
+	} else {
+		pid_t pid = fork();		// fork 失败
+		if (pid < 0) panic("Fork Failed!");
+		else if (pid == 0) {	// 子进程
+			if (cmd->cmd_file_in) 		dup2(open(cmd->cmd_file_in, O_RDONLY, 0666), STDIN_FILENO);
+			else if (fd_in > 0) 		dup2(fd_in, STDIN_FILENO);
+
+			if (cmd->cmd_file_out)		dup2(open(cmd->cmd_file_out, O_RDWR | O_CREAT, 0666), STDOUT_FILENO);
+			else if (cmd->cmd_file_apd)	dup2(open(cmd->cmd_file_apd, O_WRONLY | O_CREAT | O_APPEND, 0666), STDOUT_FILENO);
+			else if (fd_out > 0)		dup2(fd_out, STDOUT_FILENO);
+			
+			execvp(cmd->cmd_target, cmd->cmd_args);
+
+			panic("Unreachable Code! \nError Occurred in the EXECUTION of your command!");
+		} else {				// 父进程
+			int status;
+			waitpid(0, &status, 0);
+			if (!WIFEXITED(status)) panic("Error! \nForked subprocess doesn't exit normal!");
+		}
+	}
+}
+void execCmdAll(Cmd *cmds) {
+	size_t ncmds = 0, cmdno = 0;
+	Cmd *tmp = cmds;
+	while (tmp->cmd_target != NULL) ++ncmds, ++tmp;
+
+	int fd[2];
+	int prev_out_fd = -1;
+
+	while (cmds->cmd_target != NULL) {
+		pipe(fd);
+		execCmd(cmds, (cmdno == 0) ? -1 : prev_out_fd, (cmdno == ncmds - 1) ? -1 : fd[1]);
+		
+		close(fd[1]);
+        if (prev_out_fd > 0) close(prev_out_fd);
+        prev_out_fd = fd[0];
+		++cmds,++cmdno;
+	}
+	if (prev_out_fd > 0) close(prev_out_fd);
 }
