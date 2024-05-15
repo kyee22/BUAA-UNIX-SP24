@@ -7,8 +7,9 @@ main: main.c
 run:
 	./main
 
-test: test.c
-	gcc -o test test.c
+test:
+	@echo "Copying files from test directory to the current directory..."
+	cp -r case/* .
 
-testcase:
-	
+
+

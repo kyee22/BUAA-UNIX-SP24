@@ -42,6 +42,8 @@ void CMD_INIT(Cmd * cmd, int nargc);		/*  初始化 Cmd 结构体  */
 void makeToken(Token *token, Token_t type, char *str, unsigned int len);	/*  解析: buf   ->  Token  */
 void parseTokens(Token *tokens, char *buf);									/*  解析: Token ->  Cmd    */
 void parseCmds(Cmd * cmds, Token *tokens);
+void printTokens(Token *tokens);	// for debug
+void printCmds(Cmd *cmds); 			// for debug
 void bufcpy(char **s, char *buf, size_t len);
 void execCmd(Cmd *cmd, int fd_in, int fd_out);
 void execCmdAll(Cmd *cmds);
@@ -54,6 +56,10 @@ int main() {
 		print_current_directory();
 		if (fgets(buf, BUF_SIZE, stdin) != NULL) {
 			if (buf[strlen(buf) - 1] == '\n') buf[strlen(buf) - 1] = '\0';
+			// if (strcmp(buf, "exit") == 0) {
+    		// 	printf("\033[1;33m | ____|_  _(_) |_  |  \\/  |_   _/ ___|| |__   ___| | | \n |  _| \\ \\/ / | __| | |\\/| | | | \\___ \\| '_ \\ / _ \\ | | \n | |___ >  <| | |_  | |  | | |_| |___) | | | |  __/ | | \n |_____/_/\\_\\_|\\__| |_|  |_|\\__, |____/|_| |_|\\___|_|_| \n                            |___/                       \033[0m\n");
+			// 	break;
+			// }
 			Cmd * cmds = (Cmd *) malloc(sizeof(Cmd) * NCMD);
 			Token * tokens = (Token *) malloc(sizeof(Token) * NTOKEN);
 			parseTokens(tokens, buf);
@@ -203,6 +209,56 @@ void parseCmds(Cmd *cmds, Token *tokens) {
 		}
 	}
 	cmds->cmd_target = NULL;
+}
+
+void printTokens(Token *tokens) {
+	int tot = 0;
+	while (tokens->type != TOKEN_END) {
+		char *s;
+		switch (tokens->type)
+		{
+		case TOKEN_PIPE:
+			s = "|";
+			break;
+		case TOKEN_REDIR_APD:
+			s = ">>";
+			break;
+		case TOKEN_REDIR_OUT:
+			s = ">";
+			break;
+		case TOKEN_REDIR_IN:
+			s = "<";
+			break;
+		case TOKEN_SYM:
+		case TOKEN_STR:
+		default:
+			s = (char *) malloc(sizeof(char) * tokens->len + 1);
+			memcpy(s, tokens->str, tokens->len);
+			s[tokens->len] = '\0';
+		}
+		char* type_list[] = {"TOKEN_SYM", "TOKEN_STR", "TOKEN_PIPE","TOKEN_END","TOKEN_REDIR_IN", "TOKEN_REDIR_OUT", "TOKEN_REDIR_APD" } ;
+
+		printf("(token %d) %s : %s\n", ++tot, type_list[tokens->type], s);
+		++tokens;
+	}
+}
+void printCmds(Cmd *cmds) {
+	int tot = 0;
+	while (cmds->cmd_target != NULL)
+	{
+		printf("(command %d) [%s]: ",++tot, cmds->cmd_target);
+		char **args = cmds->cmd_args;
+		while (*args != 0) {
+			printf("[%s]; ", *args);
+			++args;
+		}
+		if (cmds->cmd_file_in) printf(" < [%s]",cmds->cmd_file_in);
+		if (cmds->cmd_file_out) printf(" > [%s]",cmds->cmd_file_out);
+		if (cmds->cmd_file_apd) printf(" >> [%s]",cmds->cmd_file_apd);
+		printf("\n");
+		++cmds;
+	}
+	
 }
 void bufcpy(char **s, char *buf, size_t len) {
 	*s = (char *)malloc(sizeof(char) * (len + 1));
